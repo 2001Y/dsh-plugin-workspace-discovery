@@ -1,0 +1,6 @@
+# dsh-plugin-workspace-discovery bundle patch: mounts the host plugin
+# (discovery tools + Web UI routes). The client half is picked up from the
+# package's `dsh.client` declaration in package.json.
+- insert:
+    - id: workspace-discovery
+      name: "dsh-plugin-workspace-discovery"
