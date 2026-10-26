@@ -58,6 +58,8 @@ dsh plugin --profile web add ./dsh-plugin-workspace-discovery
 
 扫描从不跟随符号链接，不进入已发现的仓库内部（因此嵌套检出不会被重复报告），并按注册表的规范路径进行分类。
 
+针对 macOS 有两项安全措施。其一：遍历主目录时，不会进入受 TCC 隐私确认保护的文件夹（`Documents`、`Downloads`、`Desktop`、`Pictures`、`Movies`、`Music`、`Library`）——后台进程读取这些文件夹可能会卡在一个无人应答的确认对话框上。如果仓库放在这些文件夹里，请将其显式列为扫描根目录（若 macOS 询问，请允许 DSH 宿主访问）。其二：扫描在子进程中执行，每个根目录有 25 秒超时，因此被卡住或过大的目录树只会让该根目录报错，而不会拖住整个 Harness。
+
 ## 模型工具
 
 | 工具 | 作用 |

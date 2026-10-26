@@ -58,6 +58,8 @@ Settings live in a host-shared file, `$DSH_HOME/workspace-discovery.config.json`
 
 Scanning never follows symlinks, never descends into a repository it already found (so nested checkouts are not reported separately), and classifies results against the registry's canonical paths.
 
+Two macOS-specific safeguards: when the walk passes through the home directory it does **not** wander into the folders macOS guards with TCC privacy prompts (`Documents`, `Downloads`, `Desktop`, `Pictures`, `Movies`, `Music`, `Library`) — reading those from a background process can block on a consent prompt nobody is there to answer. Name such a folder as a scan root explicitly if you keep repositories there (and grant the DSH host access if macOS asks). And the walk itself runs in a child process with a 25-second per-root timeout, so a blocked or enormous tree costs one root an error entry instead of stalling the Harness.
+
 ## Model-facing tools
 
 | Tool | Effect |

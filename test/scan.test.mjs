@@ -57,3 +57,18 @@ test('duplicate roots do not duplicate candidates', async () => {
   const { candidates } = await scanRoots({ roots: [root, root], maxDepth: 4 })
   assert.equal(candidates.length, 2)
 })
+
+test('protected home children are skipped when passing through home, unless named as a root', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'wsd-home-'))
+  await mkdir(join(home, 'Documents', 'docrepo', '.git'), { recursive: true })
+  await mkdir(join(home, 'dev', 'devrepo', '.git'), { recursive: true })
+
+  const through = await scanRoots({ roots: [home], maxDepth: 3, homeDir: home })
+  assert.deepEqual(through.candidates.map(c => c.path), [join(home, 'dev', 'devrepo')])
+
+  const explicit = await scanRoots({ roots: [home, join(home, 'Documents')], maxDepth: 3, homeDir: home })
+  assert.deepEqual(
+    explicit.candidates.map(c => c.path).sort(),
+    [join(home, 'dev', 'devrepo'), join(home, 'Documents', 'docrepo')].sort(),
+  )
+})

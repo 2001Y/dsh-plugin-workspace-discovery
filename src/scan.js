@@ -10,6 +10,7 @@
  * @module dsh-plugin-workspace-discovery/scan
  */
 import { readdir, realpath, stat } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 
 /** Directory names never descended into during a scan. */
@@ -28,12 +29,32 @@ export const DEFAULT_EXCLUDE = [
 ]
 
 /**
+ * Home-directory children that macOS guards with TCC privacy consent
+ * (Documents, Downloads, Desktop, media folders). Reading them from a
+ * background process can block on a consent prompt that nobody is there to
+ * answer, stalling the whole scan. When the walk passes through the home
+ * directory it skips these — unless the folder was named as a scan root
+ * itself, which is the user's explicit opt-in.
+ */
+export const PROTECTED_HOME_CHILDREN = [
+  'Documents',
+  'Downloads',
+  'Desktop',
+  'Pictures',
+  'Movies',
+  'Music',
+  'Library',
+]
+
+/**
  * Scan the given roots for git repositories.
  * @param {object} options
  * @param {string[]} options.roots - Absolute directories to walk.
  * @param {number} [options.maxDepth] - How deep below each root to look (root = 0).
  * @param {string[]} [options.exclude] - Extra directory names to skip, on top of DEFAULT_EXCLUDE.
  * @param {number} [options.maxResults] - Safety cap on reported repositories.
+ * @param {string} [options.homeDir] - Home directory for the TCC-protected
+ *   children rule (defaults to the OS home directory).
  * @returns {Promise<{candidates: Array<{path: string, name: string, gitMtime: string | null}>, errors: Array<{root: string, error: string}>, truncated: boolean}>}
  *   Candidates sorted by most recent `.git` activity first (mtime descending,
  *   name as tiebreak). Paths are canonical (realpath-resolved) and unique.
@@ -49,6 +70,26 @@ export async function scanRoots(options) {
   const found = new Map()
   const errors = []
   let truncated = false
+
+  // Canonical set of the requested roots, so the protected-children rule can
+  // tell "the walk is passing through home" apart from "the user explicitly
+  // asked for this folder".
+  const canonicalRoots = new Set()
+  for (const root of roots) {
+    if (typeof root !== 'string' || root.length === 0) continue
+    try {
+      canonicalRoots.add(await realpath(root))
+    } catch {
+      // Reported as an error when the root itself is walked below.
+    }
+  }
+  let canonicalHome = options?.homeDir ?? homedir()
+  try {
+    canonicalHome = await realpath(canonicalHome)
+  } catch {
+    // Keep the literal path; the rule simply never matches.
+  }
+  const protectedChildren = new Set(PROTECTED_HOME_CHILDREN)
 
   for (const root of roots) {
     if (typeof root !== 'string' || root.length === 0) continue
@@ -92,7 +133,11 @@ export async function scanRoots(options) {
         // Dirent.isDirectory() is false for symlinks, so links are never followed.
         if (!entry.isDirectory()) continue
         if (exclude.has(entry.name)) continue
-        stack.push({ dir: join(dir, entry.name), depth: depth + 1 })
+        const child = join(dir, entry.name)
+        // Passing through the home directory: do not wander into folders
+        // macOS guards with a privacy prompt, unless one is itself a root.
+        if (dir === canonicalHome && protectedChildren.has(entry.name) && !canonicalRoots.has(child)) continue
+        stack.push({ dir: child, depth: depth + 1 })
       }
     }
   }
